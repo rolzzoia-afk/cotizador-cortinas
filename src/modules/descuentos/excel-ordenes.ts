@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx';
 import type { CatalogoProductos, Pano, Ventana } from '@/modules/cotizador/types';
 import { esLineaB } from '@/modules/cotizador/lineaB';
 import { esCenefaCuadrada } from '@/modules/cotizador/fase2';
+import { esGrupoDobleTela } from '@/modules/cotizador/fase0-dual';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import {
   buscarAdicionalCenefaOvalada,
@@ -323,16 +324,23 @@ export function generarOrdenesOptimizador(
         // cortes de aluminio; el resto del despiece (carritos/lamas/alto de tela)
         // es referencia y no debe ensuciar el archivo.
         const esVert = esCategoriaVertical(v.categoria);
-        // BEEBLACK doble (screen + blackout): UNA estructura y DOS telas. El 2º
-        // paño trae solo su tela, así que no repite los PERFILES — mismo criterio
-        // que el dual roller con las fijaciones (bom.ts `omitirFijaciones`). Las
-        // MANILLAS sí pasan: hay una por tela y su toggle vive en cada paño, así
-        // que la del blackout (paño 2) se perdía y el taller no la cortaba.
-        const bbSegundaTela = esBeeblack && !!p.dual && i > 0;
-        const esCorteManilla = (col: string) => col.startsWith('MANILLA ');
-        for (const c of d.cortes) {
+        // BEEBLACK doble (screen + blackout): UNA estructura y DOS telas. La
+        // estructura entera es del PRIMER paño; el 2º trae solo su tela, que no
+        // viaja a esta hoja. NI PERFILES NI MANILLAS: la receta `|2T` de la
+        // segunda tela no lleva el riel (SLM01) ni la agarradera (SML10), así
+        // que cortarlos es cortar material que nadie compró. Mismo criterio que
+        // el dual roller con las fijaciones (bom.ts `omitirFijaciones`).
+        //
+        // ⚠ El doble NO se reconoce por `p.dual`: en el beeblack esa marca no se
+        // persiste —se deduce del grupo, ver `esGrupoDobleTela`— y llegaba en
+        // `false` en TODOS los segundos paños, así que la regla no se aplicaba
+        // nunca y la hoja repetía la estructura entera. Lo encontró el dueño en
+        // la OT #3238: mandaba a cortar 9 manillas donde van 6.
+        const bbSegundaTela =
+          esBeeblack && i > 0 && esGrupoDobleTela(v.categoria || '', panos.length, opts?.reglas?.tipos);
+        const cortesDeEstructura = bbSegundaTela ? [] : d.cortes;
+        for (const c of cortesDeEstructura) {
           if (!c.columnaExcel || c.columnaExcel === 'CENEFA OVALADA') continue;
-          if (bbSegundaTela && !esCorteManilla(c.columnaExcel)) continue;
           if (esVert && c.columnaExcel !== 'PERFIL CABEZAL' && c.columnaExcel !== 'VARILLA') continue;
           // Perfil de oscuridad sin superficie (muro/piso) elegida: medida pendiente
           // → celda vacía + advertencia (se llena en Fase 2). Los demás cortes van.
@@ -343,7 +351,9 @@ export function generarOrdenesOptimizador(
         // PERF. El taller las lee junto a la medida. Advertencia si un perfil está
         // activo pero le falta la medida (superficie) o la perforación (SEMI). Los
         // separadores no llevan perforación: solo avisan si les falta la medida.
-        for (const c of d.cortes) {
+        // La 2.ª tela de un beeblack doble no aporta estructura, así que tampoco
+        // sus perforaciones ni sus advertencias: son del perfil del primer paño.
+        for (const c of cortesDeEstructura) {
           const esSeparador = c.columnaExcel.startsWith('SEPARADOR');
           const perfCol = PERF_POR_PERFIL[c.columnaExcel];
           if (!perfCol && !esSeparador) continue;
@@ -375,7 +385,7 @@ export function generarOrdenesOptimizador(
         // oscuridad: el color sale del propio paño.
         if (esBeeblack) {
           const colorBb = String((p.color as string) || v.color || '').trim();
-          if (colorBb && d.cortes.some((c) => c.columnaExcel && c.medidaCm > 0)) {
+          if (colorBb && cortesDeEstructura.some((c) => c.columnaExcel && c.medidaCm > 0)) {
             fila['COLOR PERFIL'] = colorBb;
           }
         }

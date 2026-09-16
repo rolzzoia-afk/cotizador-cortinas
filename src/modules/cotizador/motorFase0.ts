@@ -136,9 +136,12 @@ export type FilaFase0 = {
   /**
    * Esta fila es la SEGUNDA TELA de una cortina de dos telas: comparte la
    * estructura con la primera de su ventana (un beeblack doble es un solo
-   * juego de perfiles con un screen y un blackout adentro). Trae todo lo suyo
-   * —tela, manilla, kit, caja— pero no vuelve a pagar el riel, en un panel
-   * propio `cod|2T` con la receta `BEE_BK|2T` (dueño, 2026-08-27).
+   * juego de perfiles con un screen y un blackout adentro). Trae su tela y su
+   * ferretería, pero NO vuelve a pagar lo que es de la estructura —el riel
+   * (SLM01), la agarradera (SML10), la caja ni la cinta—, en un panel propio
+   * `cod|2T` con la receta `BEE_BK|2T` (dueño, 2026-08-27; la caja y la
+   * agarradera salieron después, ver `20260915_beeblack_2t_sin_caja.sql`).
+   * La hoja de estructura sigue la misma regla: el 2.º paño no aporta cortes.
    *
    * Solo cambia el precio de las familias que TIENEN receta `|2T`: hoy las
    * tres del beeblack. Un dual roller marcado así se cotiza como siempre.
