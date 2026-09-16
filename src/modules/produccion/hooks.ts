@@ -73,7 +73,7 @@ import {
 import { calcularSubEtapa, debeAvanzar, type AreasListas } from './avance';
 import { elegirPlanDeOT, normalizarNumeroOT, planCubreOT } from './buscarPlan';
 import { rowACola, type FilaCola, type ItemCola } from './lotes';
-import type { ConsumoAluminio, CostoBodega, CostoManualOT } from './costoOT';
+import type { ConsumoAluminio, CostoBodega } from './costoOT';
 import { CLAVE_AREA } from './constants';
 import type { AreaProduccion, CheckProduccion } from './types';
 
@@ -1088,46 +1088,8 @@ export function useCostosBodega(activo: boolean): { costos: CostoBodega[]; loadi
   return { costos, loading };
 }
 
-/**
- * Guarda lo que se escribió a mano en «Costo total». Es el otro upsert de OT
- * completa de este módulo: relee la OT justo antes para no pisar lo que haya
- * guardado la oficina mientras tanto.
- */
-export function useGuardarCostosOT(numeroOT: string): {
-  guardar: (manual: CostoManualOT) => Promise<void>;
-} {
-  const { empresaId } = useAuth();
-
-  const guardar = useCallback(
-    async (manual: CostoManualOT) => {
-      const numero = numeroOT.trim();
-      if (!empresaId || !numero) return;
-      const { data, error } = await supabase
-        .from('ots')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('numero_ot', numero)
-        .order('fecha_modificacion', { ascending: false })
-        .limit(1);
-      if (error) throw error;
-      const fila = ((data as unknown as OTRow[]) || [])[0];
-      if (!fila) throw new Error(`La OT ${numero} ya no está en el sistema.`);
-      const ot = rowToOT(fila);
-      const actualizada: OT = {
-        ...ot,
-        datosGenerales: { ...(ot.datosGenerales || {}), costosOT: manual },
-        fechaModificacion: new Date().toISOString(),
-      };
-      const { error: errUp } = await supabase
-        .from('ots')
-        .upsert(otToRow(actualizada, empresaId) as unknown as never, { onConflict: 'id' });
-      if (errUp) throw errUp;
-    },
-    [empresaId, numeroOT],
-  );
-
-  return { guardar };
-}
+// Lo tecleado en «Costo total» ya no se guarda desde acá: lo guarda la RPC
+// `ot_costo_guardar` junto con la foto del costo (ver `costoOTStore.ts`).
 
 // ── Cerrar la OT desde el taller ─────────────────────────────────────
 

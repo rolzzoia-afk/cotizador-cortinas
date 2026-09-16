@@ -161,7 +161,9 @@ export type DatosGenerales = {
   /**
    * Lo que se escribe a mano en «Costo total» (Producción, solo administrador):
    * mano de obra, auto, TAG y las fallas de tela. El resto de esa pantalla se
-   * calcula solo. Lo edita ÚNICAMENTE esa pantalla.
+   * calcula solo. Lo edita ÚNICAMENTE esa pantalla, con la RPC
+   * `ot_costo_guardar`, que en la misma pasada deja la foto del costo completo
+   * en `ots_costos` / `ots_costos_lineas`.
    */
   costosOT?: import('@/modules/produccion/costoOT').CostoManualOT;
 };

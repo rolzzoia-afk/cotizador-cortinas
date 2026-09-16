@@ -30,11 +30,13 @@ import {
 import {
   useConsumoAluminio,
   useCostosBodega,
-  useGuardarCostosOT,
   useHojaCorte,
   useInsumosOT,
 } from '@/modules/produccion/hooks';
+import { fotoCostoOT, fotoDesactualizada } from '@/modules/produccion/costoOTFoto';
+import { useFotoCostoOT } from '@/modules/produccion/costoOTStore';
 import { partirLineaConCodigo } from '@/modules/inventario/codigosInsumo';
+import { EstadoFotoCosto } from './EstadoFotoCosto';
 
 const m2 = (n: number) => n.toFixed(2).replace('.', ',');
 
@@ -105,15 +107,16 @@ function CampoManual({
 }
 
 export default function VistaCosto({ ot, otCargada }: { ot: string; otCargada: OT | null }) {
-  const { parametros } = useParametrosCotizador();
-  const { reglas } = useReglasPrecios();
+  const { parametros, loading: cargandoParametros } = useParametrosCotizador();
+  const { reglas, loading: cargandoReglas } = useReglasPrecios();
   // El catálogo trae el costo por metro de cada tela (columna Costo del Excel).
-  const { catalogo } = useCatalogoProductos();
+  const { catalogo, loading: cargandoCatalogo } = useCatalogoProductos();
   const { hoja, loading: cargandoHoja } = useHojaCorte(otCargada);
   const { insumos, colores, loading: cargandoInsumos } = useInsumosOT(otCargada);
   const { consumo, loading: cargandoAluminio } = useConsumoAluminio(ot);
-  const { costos } = useCostosBodega(!!ot);
-  const { guardar } = useGuardarCostosOT(ot);
+  const { costos, loading: cargandoCostos } = useCostosBodega(!!ot);
+  // La foto que ya quedó en la base (`ots_costos`) y cómo reemplazarla.
+  const { foto, loading: cargandoFoto, guardar } = useFotoCostoOT(otCargada?.id);
 
   const [manual, setManual] = useState<CostoManualOT>({});
   const [sucio, setSucio] = useState(false);
@@ -177,12 +180,30 @@ export default function VistaCosto({ ot, otCargada }: { ot: string; otCargada: O
     [hoja, catalogo, telaReferencia, consumo, insumos, reglas, costos, otCargada, parametros, manual],
   );
 
+  // Mientras falte cualquier dato, el costo de la pantalla está incompleto (el
+  // aluminio en $0 mientras llega la colmena) y guardarlo sería dejar en la base
+  // un número que no es.
+  const cargando =
+    cargandoHoja ||
+    cargandoInsumos ||
+    cargandoAluminio ||
+    cargandoCostos ||
+    cargandoCatalogo ||
+    cargandoReglas ||
+    cargandoParametros;
+  const desactualizada = fotoDesactualizada(foto, costo);
+
   const guardarManual = async () => {
+    if (cargando || !otCargada) return;
     setGuardando(true);
     try {
-      await guardar(manual);
+      const guardada = await guardar(fotoCostoOT(costo, manual), parametros.iva);
       setSucio(false);
-      toast.success('Costos guardados en la OT.');
+      toast.success(
+        guardada.version > 1
+          ? `Costo guardado en la base (versión ${guardada.version}).`
+          : 'Costo guardado en la base.',
+      );
     } catch (e) {
       toast.error('No se pudo guardar: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -206,19 +227,27 @@ export default function VistaCosto({ ot, otCargada }: { ot: string; otCargada: O
     );
   }
 
-  const cargando = cargandoHoja || cargandoInsumos || cargandoAluminio;
   const margenSano = costo.margen != null && costo.margen >= MARGEN_SANO;
+  const porGuardar = sucio || desactualizada;
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          Solo la ve un administrador. Los metros y los materiales son los que consumió esta OT de
-          verdad; la mano de obra y las fallas se escriben a mano.
-        </p>
-        <Button size="sm" onClick={guardarManual} disabled={!sucio || guardando}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">
+            Solo la ve un administrador. Los metros y los materiales son los que consumió esta OT de
+            verdad; la mano de obra y las fallas se escriben a mano.
+          </p>
+          <EstadoFotoCosto foto={foto} desactualizada={!sucio && desactualizada} cargando={cargando || cargandoFoto} />
+        </div>
+        <Button
+          size="sm"
+          onClick={guardarManual}
+          disabled={cargando || cargandoFoto || guardando || !porGuardar}
+          title="Guarda lo tecleado en la OT y deja el costo completo en la base"
+        >
           <Save className="mr-1.5 h-4 w-4" />
-          {guardando ? 'Guardando…' : sucio ? 'Guardar' : 'Guardado ✓'}
+          {guardando ? 'Guardando…' : cargando ? 'Calculando…' : porGuardar ? 'Guardar' : 'Guardado ✓'}
         </Button>
       </div>
 
